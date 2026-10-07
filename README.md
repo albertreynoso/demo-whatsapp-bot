@@ -2,7 +2,7 @@
 
 Demo de portafolio: un asistente para una clínica dental (ficticia) que responde precios y horarios **solo con la información del negocio**, consulta la agenda, **reserva citas** y **deriva a una persona** cuando hace falta. Funciona por WhatsApp (API oficial de Meta) y en un chat web para probarlo sin WhatsApp.
 
-> **EN:** AI WhatsApp assistant for appointment booking. Answers from the business's own document, checks real availability, books 30-min slots (Google Sheets or JSON), and hands off to a human. Node.js + TypeScript, Claude API with tool use, WhatsApp Cloud API with signed webhooks.
+> **EN:** AI WhatsApp assistant for appointment booking. Answers from the business's own document, checks real availability, books 30-min slots (Google Sheets or JSON), and hands off to a human. Node.js + TypeScript, Gemini API with function calling, WhatsApp Cloud API with signed webhooks.
 
 ## Qué hace
 
@@ -17,12 +17,12 @@ Demo de portafolio: un asistente para una clínica dental (ficticia) que respond
 ## Cómo está hecho
 
 ```
-WhatsApp ──webhook firmado──▶ server.ts ──▶ bot.ts (Claude + 3 herramientas) ──▶ agenda.ts (Google Sheets / JSON)
+WhatsApp ──webhook firmado──▶ server.ts ──▶ bot.ts (Gemini + 3 herramientas) ──▶ agenda.ts (Google Sheets / JSON)
 Chat web ──/api/chat──────────▶     │                                    └──▶ derivar a recepción (WhatsApp)
                                     └──▶ whatsapp.ts (envía la respuesta)
 ```
 
-- `src/bot.ts` — conversación por paciente (30 min sin mensajes = conversación nueva), mensajes seguidos procesados en orden, herramientas `consultar_horarios`, `agendar_cita`, `derivar_a_recepcion` con esquemas estrictos.
+- `src/bot.ts` — conversación por paciente (30 min sin mensajes = conversación nueva), mensajes seguidos procesados en orden, herramientas `consultar_horarios`, `agendar_cita`, `derivar_a_recepcion` con esquemas JSON.
 - `src/agenda.ts` — bloques de 30 min según el horario del negocio, zona horaria de Lima, sin horarios pasados ni repetidos.
 - `src/whatsapp.ts` — valida la firma `X-Hub-Signature-256` de Meta, ignora reintentos y estados de entrega.
 - `src/server.ts` — límite de 40 mensajes por hora e IP en la demo web, logs en JSON.
@@ -30,12 +30,12 @@ Chat web ──/api/chat──────────▶     │               
 
 ## Probarlo en tu computadora
 
-Requisitos: Node.js 22 o superior y una API key de Anthropic.
+Requisitos: Node.js 22 o superior y una API key de Gemini (gratis en aistudio.google.com).
 
 ```bash
 npm install
 cp .env.example .env      # en Windows: copy .env.example .env
-# completa ANTHROPIC_API_KEY en .env
+# completa GEMINI_API_KEY en .env
 npm run dev
 ```
 
@@ -68,8 +68,8 @@ El token temporal dura 24 horas. Para producción se crea un **usuario del siste
 
 ## Costos para un negocio real
 
-- **IA:** depende del modelo (`CLAUDE_MODEL`). Con `claude-haiku-4-5` una conversación de agenda cuesta centavos; con `claude-opus-5-5` (por defecto) las respuestas son más cuidadosas y cuesta más. El sistema reutiliza el contexto en caché para abaratar cada mensaje.
-- **WhatsApp:** Meta cobra por conversación según el país y el tipo (las respuestas a un cliente que escribió primero son las más baratas).
+- **IA:** depende del modelo (`GEMINI_MODEL`). Con `gemini-3.5-flash-lite` (por defecto) una conversación de agenda cuesta fracciones de centavo; `gemini-3.8-flash` responde con más cuidado y cuesta más, pero en la capa gratuita suele estar saturado (error 503). La capa gratuita alcanza para la demo. Gemini reutiliza en caché el contexto repetido para abaratar cada mensaje.
+- **WhatsApp:** Meta cobra por mensaje según el país y el tipo (los recordatorios son plantillas pagadas). Revisar la tabla oficial de Meta antes de cotizar.
 - **Servidor:** Render o Railway desde US$ 0–7 al mes.
 
 ## Límites conocidos (demo)

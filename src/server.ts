@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 import express, { type Request, type Response } from "express";
 import { Agenda, JsonAgendaStore, SheetsAgendaStore, type AgendaStore } from "./agenda.js";
 import { ClinicaBot, Conversaciones, SISTEMA, contexto } from "./bot.js";
@@ -126,8 +126,10 @@ async function main(): Promise<void> {
   const store: AgendaStore = process.env.GOOGLE_SHEET_ID ? new SheetsAgendaStore(process.env.GOOGLE_SHEET_ID) : new JsonAgendaStore("data/citas.json");
   const wa = configWhatsApp() ? new WhatsApp(configWhatsApp()!) : null;
   const bot = new ClinicaBot({
-    client: new Anthropic(), agenda: new Agenda(store), conversaciones: new Conversaciones(),
-    sistema: SISTEMA(await readFile("data/clinica.md", "utf8")), modelo: process.env.CLAUDE_MODEL ?? "claude-opus-5-5", derivar: derivador(wa),
+    // 2 intentos y 30 s por llamada: si Gemini está saturado (503), el paciente recibe aviso en segundos, no en minuto y medio
+    client: new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { retryOptions: { attempts: 2 }, timeout: 30_000 } }),
+    agenda: new Agenda(store), conversaciones: new Conversaciones(),
+    sistema: SISTEMA(await readFile("data/clinica.md", "utf8")), modelo: process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite", derivar: derivador(wa),
   });
   const port = Number(process.env.PORT ?? 3000);
   crearApp({ bot, wa, limite: new Limite(40, 60 * 60_000), vistos: new Vistos() })

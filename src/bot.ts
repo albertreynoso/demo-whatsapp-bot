@@ -1,10 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { ThinkingLevel, type Content, type FunctionCall, type FunctionDeclaration, type GenerateContentResponse, type GoogleGenAI, type Part } from "@google/genai";
 import type { Agenda, NuevaCita } from "./agenda.js";
 import { log } from "./log.js";
-
-type Mensaje = Anthropic.Beta.BetaMessageParam;
-type Respuesta = Anthropic.Beta.BetaMessage;
-type Resultado = Anthropic.Beta.BetaToolResultBlockParam;
 
 const MAX_PASOS = 6; // llamadas al modelo por mensaje del paciente (herramientas incluidas)
 const SIN_RESPUESTA = "Disculpa, se me complicó responder eso. ¿Quieres que te comunique con recepción?";
@@ -23,49 +19,35 @@ Reglas:
 ${documento}
 </documento_clinica>`;
 
-const texto = (descripcion: string) => ({ type: "string" as const, description: descripcion });
+const texto = (descripcion: string) => ({ type: "string", description: descripcion });
 
-const HERRAMIENTAS: Anthropic.Beta.BetaTool[] = [
+const HERRAMIENTAS: FunctionDeclaration[] = [
   {
     name: "consultar_horarios",
     description: "Horarios libres (bloques de 30 min) de un día. Úsala siempre antes de proponer horarios; no inventes disponibilidad.",
-    strict: true,
-    input_schema: { type: "object", properties: { fecha: texto("Día en formato AAAA-MM-DD") }, required: ["fecha"], additionalProperties: false },
+    parametersJsonSchema: { type: "object", properties: { fecha: texto("Día en formato AAAA-MM-DD") }, required: ["fecha"] },
   },
   {
     name: "agendar_cita",
     description: "Reserva una cita cuando el paciente ya confirmó nombre, tratamiento, fecha y hora. Devuelve ok=false si el horario se ocupó.",
-    strict: true,
-    input_schema: {
+    parametersJsonSchema: {
       type: "object",
       properties: {
         nombre: texto("Nombre completo del paciente"), telefono: texto("Teléfono de contacto"),
         tratamiento: texto("Tratamiento del documento"), fecha: texto("AAAA-MM-DD"), hora: texto("HH:MM, uno de los horarios libres"),
       },
       required: ["nombre", "telefono", "tratamiento", "fecha", "hora"],
-      additionalProperties: false,
     },
   },
   {
     name: "derivar_a_recepcion",
     description: "Pasa la conversación a una persona de recepción: urgencias, quejas, preguntas que el documento no responde o cuando el paciente lo pide.",
-    strict: true,
-    input_schema: { type: "object", properties: { motivo: texto("Resumen de una línea para recepción") }, required: ["motivo"], additionalProperties: false },
+    parametersJsonSchema: { type: "object", properties: { motivo: texto("Resumen de una línea para recepción") }, required: ["motivo"] },
   },
 ];
 
-/** Effort bajo para chat; fallbacks del servidor en los modelos que los aceptan (Haiku 4.5 no acepta ninguno de los dos). */
-function extrasDelModelo(modelo: string) {
-  if (modelo.startsWith("claude-haiku")) return {};
-  const conFallback = /^claude-(opus-5|fable-5|sonnet-5-5)/.test(modelo);
-  return {
-    output_config: { effort: "low" as const },
-    ...(conFallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
-  };
-}
-
 interface Sesion {
-  mensajes: Mensaje[]; // solo se agrega al final: editar el historial invalida los bloques de razonamiento
+  mensajes: Content[]; // solo se agrega al final: Gemini exige devolver intactas las firmas de razonamiento (thoughtSignature)
   ultimo: number;
   derivada: boolean;
   cola: Promise<unknown>; // procesa en orden los mensajes que llegan seguidos
@@ -93,7 +75,7 @@ export class Conversaciones {
 }
 
 export interface BotDeps {
-  client: Anthropic;
+  client: GoogleGenAI;
   agenda: Agenda;
   conversaciones: Conversaciones;
   sistema: string;
@@ -114,42 +96,52 @@ export class ClinicaBot {
 
   private async turno(sesion: Sesion, id: string, mensaje: string, contexto: string): Promise<string> {
     if (sesion.derivada) return YA_DERIVADA;
-    sesion.mensajes.push({ role: "user", content: sesion.mensajes.length ? mensaje : `${contexto}\n${mensaje}` });
+    agregarDelUsuario(sesion.mensajes, [{ text: sesion.mensajes.length ? mensaje : `${contexto}\n${mensaje}` }]);
     for (let paso = 0; paso < MAX_PASOS; paso++) {
       const respuesta = await this.pedir(sesion.mensajes, id);
-      if (respuesta.stop_reason === "refusal") return SIN_RESPUESTA;
-      sesion.mensajes.push({ role: "assistant", content: respuesta.content });
-      if (respuesta.stop_reason !== "tool_use") return textoDe(respuesta) || SIN_RESPUESTA;
-      sesion.mensajes.push({ role: "user", content: await this.ejecutarHerramientas(respuesta, sesion, id) });
+      const contenido = respuesta.candidates?.[0]?.content;
+      if (!contenido?.parts?.length) return SIN_RESPUESTA; // bloqueada por seguridad o llamada mal formada
+      sesion.mensajes.push(contenido);
+      const llamadas = respuesta.functionCalls;
+      if (!llamadas?.length) return respuesta.text?.trim() || SIN_RESPUESTA;
+      agregarDelUsuario(sesion.mensajes, await this.ejecutarHerramientas(llamadas, sesion, id));
     }
     return SIN_RESPUESTA;
   }
 
-  private async pedir(mensajes: Mensaje[], id: string): Promise<Respuesta> {
+  private async pedir(mensajes: Content[], id: string): Promise<GenerateContentResponse> {
     const inicio = Date.now();
-    const respuesta = await this.deps.client.beta.messages.create({
-      model: this.deps.modelo, max_tokens: 16000, system: this.deps.sistema, tools: HERRAMIENTAS,
-      cache_control: { type: "ephemeral" }, messages: mensajes, ...extrasDelModelo(this.deps.modelo),
+    const respuesta = await this.deps.client.models.generateContent({
+      model: this.deps.modelo, contents: mensajes,
+      config: {
+        systemInstruction: this.deps.sistema, tools: [{ functionDeclarations: HERRAMIENTAS }],
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, // chat corto: menos latencia y costo
+      },
     });
-    const { input_tokens, output_tokens, cache_read_input_tokens } = respuesta.usage;
-    log("model_call", { user_id: id, duration_ms: Date.now() - inicio, stop: respuesta.stop_reason, input_tokens, output_tokens, cache_read_input_tokens });
+    const uso = respuesta.usageMetadata;
+    log("model_call", {
+      user_id: id, duration_ms: Date.now() - inicio, stop: respuesta.candidates?.[0]?.finishReason,
+      input_tokens: uso?.promptTokenCount, output_tokens: uso?.candidatesTokenCount, cached_tokens: uso?.cachedContentTokenCount,
+    });
     return respuesta;
   }
 
-  private ejecutarHerramientas(respuesta: Respuesta, sesion: Sesion, id: string): Promise<Resultado[]> {
-    const usos = respuesta.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
-    return Promise.all(usos.map(async (uso) => ({ type: "tool_result" as const, tool_use_id: uso.id, ...(await this.ejecutar(uso, sesion, id)) })));
+  private ejecutarHerramientas(llamadas: FunctionCall[], sesion: Sesion, id: string): Promise<Part[]> {
+    return Promise.all(llamadas.map(async (llamada) => ({
+      functionResponse: { id: llamada.id, name: llamada.name, response: await this.ejecutar(llamada, sesion, id) },
+    })));
   }
 
-  private async ejecutar(uso: Anthropic.Beta.BetaToolUseBlock, sesion: Sesion, id: string) {
+  private async ejecutar(llamada: FunctionCall, sesion: Sesion, id: string): Promise<Record<string, unknown>> {
     const inicio = Date.now();
+    const nombre = llamada.name ?? "";
     try {
-      const salida = await this.herramienta(uso.name, uso.input as Record<string, string>, sesion, id);
-      log("tool_call", { user_id: id, tool: uso.name, duration_ms: Date.now() - inicio });
-      return { content: JSON.stringify(salida) };
+      const salida = await this.herramienta(nombre, (llamada.args ?? {}) as Record<string, string>, sesion, id);
+      log("tool_call", { user_id: id, tool: nombre, duration_ms: Date.now() - inicio });
+      return { output: salida };
     } catch (err) {
-      log("tool_error", { user_id: id, tool: uso.name, duration_ms: Date.now() - inicio, error: String(err) });
-      return { content: "Error interno de la herramienta. Ofrece pasar con recepción.", is_error: true };
+      log("tool_error", { user_id: id, tool: nombre, duration_ms: Date.now() - inicio, error: String(err) });
+      return { error: "Error interno de la herramienta. Ofrece pasar con recepción." };
     }
   }
 
@@ -170,8 +162,11 @@ export class ClinicaBot {
   }
 }
 
-function textoDe(respuesta: Respuesta): string {
-  return respuesta.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
+/** Si el último turno ya es del usuario (una respuesta falló o se cortó), suma las partes ahí: los roles deben alternar. */
+function agregarDelUsuario(mensajes: Content[], parts: Part[]): void {
+  const ultimo = mensajes.at(-1);
+  if (ultimo?.role === "user") ultimo.parts = [...(ultimo.parts ?? []), ...parts];
+  else mensajes.push({ role: "user", parts });
 }
 
 /** Datos del sistema para el primer mensaje: fecha y hora de Lima, canal y teléfono si se conoce. */
