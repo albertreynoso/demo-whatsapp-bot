@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Asistente Clínica Sonrisa</title>
+<meta name="description" content="Demo: asistente de WhatsApp con IA que responde precios y agenda citas para una clínica dental.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: teléfono centrado con el chat + columna lateral que explica la demo (se apila en móvil) */
+:root {
+  --bg: #eef3f1;
+  --panel: #ffffff;
+  --ink: #13201c;
+  --ink-2: #4a5a55;
+  --line: #d9e3df;
+  --chat-bg: #e7efe9;
+  --bubble-in: #ffffff;
+  --bubble-out: #d4f5dc;
+  --accent: #0f8a5f;
+  --accent-ink: #ffffff;
+  --font: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --display: "Bricolage Grotesque", "Figtree", "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1614; --panel: #17201d; --ink: #e8efec; --ink-2: #a7b6b0; --line: #2a3632;
+    --chat-bg: #111a17; --bubble-in: #1f2b27; --bubble-out: #1d4a35; --accent: #3cc18c; --accent-ink: #062016; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1614; --panel: #17201d; --ink: #e8efec; --ink-2: #a7b6b0; --line: #2a3632;
+  --chat-bg: #111a17; --bubble-in: #1f2b27; --bubble-out: #1d4a35; --accent: #3cc18c; --accent-ink: #062016; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.5 var(--font); }
+.page { max-width: 1040px; margin: 0 auto; padding-inline: 16px; padding-block: 28px; display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 32px; align-items: start; }
+@media (max-width: 820px) { .page { grid-template-columns: minmax(0, 1fr); } .about { order: 2; } }
+
+.phone { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; display: flex; flex-direction: column; height: min(760px, calc(100dvh - 56px)); min-height: 520px; box-shadow: 0 18px 50px rgb(0 0 0 / .10); }
+.bar { background: var(--accent); color: var(--accent-ink); padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+.avatar { width: 40px; height: 40px; border-radius: 50%; background: rgb(255 255 255 / .22); display: grid; place-items: center; font-weight: 700; }
+.bar b { display: block; font: 700 17px/1.2 var(--display); }
+.bar small { opacity: .85; }
+.chat { flex: 1; overflow-y: auto; background: var(--chat-bg); padding: 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+.msg { max-width: 84%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: 0 1px 1px rgb(0 0 0 / .06); }
+.msg.in { background: var(--bubble-in); align-self: flex-start; border-top-left-radius: 4px; }
+.msg.out { background: var(--bubble-out); align-self: flex-end; border-top-right-radius: 4px; }
+.msg.typing { color: var(--ink-2); font-style: italic; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px 0; background: var(--panel); }
+.chips button { font: 500 13px/1 var(--font); color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; cursor: pointer; }
+.chips button:hover { border-color: var(--accent); }
+form { display: flex; gap: 8px; padding: 10px 12px 12px; background: var(--panel); }
+input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--chat-bg); border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px; }
+form button { font: 600 15px/1 var(--font); background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 999px; padding: 0 18px; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .55; cursor: default; }
+
+.about { display: grid; gap: 18px; padding-block: 8px; }
+.about h1 { font: 700 clamp(28px, 4.4vw, 40px)/1.08 var(--display); letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+.about p, .about li { color: var(--ink-2); margin: 0; max-width: 62ch; }
+.about ol { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+.tag { font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.note { font-size: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main class="page">
+  <section class="phone" aria-label="Chat con el asistente">
+    <header class="bar">
+      <div class="avatar" aria-hidden="true">CS</div>
+      <div><b>Clínica Dental Sonrisa</b><small>Asistente virtual · responde al instante</small></div>
+    </header>
+    <div class="chat" id="chat" aria-live="polite">
+      <div class="msg in">¡Hola! 👋 Soy el asistente de Clínica Dental Sonrisa. Puedo contarte precios y horarios, y agendarte una cita. ¿En qué te ayudo?</div>
+    </div>
+    <div class="chips" id="chips">
+      <button type="button">¿Cuánto cuesta una limpieza?</button>
+      <button type="button">Quiero una cita para mañana</button>
+      <button type="button">¿Dónde quedan?</button>
+      <button type="button">Tengo un dolor fuerte de muela</button>
+    </div>
+    <form id="form" autocomplete="off">
+      <input id="texto" name="texto" aria-label="Mensaje" maxlength="600" placeholder="Escribe un mensaje" required>
+      <button id="enviar" type="submit">Enviar</button>
+    </form>
+  </section>
+
+  <section class="about">
+    <span class="tag">Demo · bot de WhatsApp con IA</span>
+    <h1>Un asistente que atiende, agenda y deriva, a cualquier hora</h1>
+    <p>Este chat usa el mismo motor que el bot de WhatsApp: la versión real responde en el número del negocio con la API oficial de Meta.</p>
+    <ol>
+      <li>Responde precios, horarios y preguntas frecuentes solo con la información del negocio; si no sabe algo, lo dice.</li>
+      <li>Consulta la agenda real y ofrece horarios libres de 30 minutos.</li>
+      <li>Reserva la cita y la guarda en Google Sheets (o en el sistema del negocio).</li>
+      <li>Si el paciente pide una persona, o es una urgencia, avisa a recepción y deja de responder solo.</li>
+    </ol>
+    <p class="note">Negocio ficticio para la demo. Las citas que reserves aquí no son reales.</p>
+  </section>
+</main>
+<script>
+const chat = document.getElementById("chat");
+const form = document.getElementById("form");
+const input = document.getElementById("texto");
+const enviar = document.getElementById("enviar");
+const chips = document.getElementById("chips");
+
+function sesionId() {
+  try {
+    const guardada = sessionStorage.getItem("sesion");
+    if (guardada) return guardada;
+    const nueva = crypto.randomUUID();
+    sessionStorage.setItem("sesion", nueva);
+    return nueva;
+  } catch (e) {
+    return crypto.randomUUID(); // sin almacenamiento: conversación nueva por pestaña
+  }
+}
+const sesion = sesionId();
+
+function agregar(texto, tipo) {
+  const burbuja = document.createElement("div");
+  burbuja.className = `msg ${tipo}`;
+  burbuja.textContent = texto;
+  chat.append(burbuja);
+  chat.scrollTop = chat.scrollHeight;
+  return burbuja;
+}
+
+async function preguntar(mensaje) {
+  const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sesion, mensaje }) });
+  const datos = await res.json().catch(() => ({}));
+  return datos.respuesta ?? datos.error ?? "No pude conectarme. Intenta de nuevo.";
+}
+
+async function mandar(mensaje) {
+  if (!mensaje.trim() || enviar.disabled) return;
+  agregar(mensaje, "out");
+  chips.hidden = true;
+  enviar.disabled = true;
+  const escribiendo = agregar("escribiendo…", "in typing");
+  try {
+    escribiendo.textContent = await preguntar(mensaje);
+    escribiendo.className = "msg in";
+  } catch (e) {
+    escribiendo.textContent = "No pude conectarme. Revisa tu conexión e intenta de nuevo.";
+    escribiendo.className = "msg in";
+  } finally {
+    enviar.disabled = false;
+    input.focus();
+  }
+}
+
+form.addEventListener("submit", (e) => { e.preventDefault(); const t = input.value; input.value = ""; mandar(t); });
+chips.addEventListener("click", (e) => { if (e.target.tagName === "BUTTON") mandar(e.target.textContent); });
+</script>
+</body>
+</html>
