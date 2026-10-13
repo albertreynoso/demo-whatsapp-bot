@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacidad · Clínica Sonrisa</title>
+<meta name="description" content="Política de privacidad y eliminación de datos del asistente demo de Clínica Dental Sonrisa.">
+<style>
+:root {
+  --bg: #eef3f1; --panel: #ffffff; --ink: #13201c; --ink-2: #4a5a55; --line: #d9e3df; --accent: #0f8a5f;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0f1614; --panel: #17201d; --ink: #e8efec; --ink-2: #a7b6b0; --line: #2a3632; --accent: #3cc18c; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0f1614; --panel: #17201d; --ink: #e8efec; --ink-2: #a7b6b0; --line: #2a3632; --accent: #3cc18c; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.6 "Segoe UI", system-ui, sans-serif; }
+main { max-width: 720px; margin: 0 auto; padding: 40px 16px 64px; }
+article { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 28px 24px; }
+h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 4px; }
+h2 { font-size: 1.25rem; margin: 28px 0 8px; }
+p, li { color: var(--ink-2); }
+.fecha { margin: 0 0 20px; font-size: .875rem; }
+.aviso { background: var(--bg); border-radius: 10px; padding: 12px 14px; }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<article>
+  <h1>Política de privacidad</h1>
+  <p class="fecha">Asistente virtual de Clínica Dental Sonrisa · Actualizada el 13 de octubre de 2026</p>
+
+  <p class="aviso">Este es un <strong>proyecto de demostración</strong>. Clínica Dental Sonrisa es un negocio ficticio y las citas no son reales. No envíes datos de salud ni información personal real.</p>
+
+  <h2>Quién es responsable</h2>
+  <p>El asistente fue desarrollado por Alberto Reynoso como demo de portafolio. Contacto: <a href="https://github.com/albertreynoso">github.com/albertreynoso</a>.</p>
+
+  <h2>Qué datos se tratan</h2>
+  <ul>
+    <li>Tu número de WhatsApp, si escribes por WhatsApp.</li>
+    <li>Los mensajes que envías al asistente.</li>
+    <li>Los datos que das para una cita: nombre, teléfono, tratamiento, fecha y hora.</li>
+  </ul>
+
+  <h2>Para qué se usan</h2>
+  <p>Solo para responder tus mensajes, consultar horarios y agendar la cita de prueba. No se usan para publicidad ni se venden a terceros.</p>
+
+  <h2>Servicios que intervienen</h2>
+  <ul>
+    <li><strong>Meta (WhatsApp Cloud API)</strong>: entrega los mensajes entre tú y el asistente.</li>
+    <li><strong>Google (Gemini API)</strong>: genera las respuestas. La demo usa la capa gratuita, en la que Google puede usar el contenido para mejorar sus productos.</li>
+    <li><strong>Render</strong>: aloja el servidor y sus registros técnicos.</li>
+  </ul>
+
+  <h2>Cuánto tiempo se guardan</h2>
+  <ul>
+    <li>Las conversaciones se guardan en memoria y se borran tras 30 minutos sin mensajes o cuando el servidor se reinicia.</li>
+    <li>Las citas de prueba se borran cada vez que el servidor se reinicia, lo que ocurre varias veces al día.</li>
+    <li>Los registros técnicos (número, hora y duración de cada respuesta) se conservan como máximo 30 días.</li>
+  </ul>
+
+  <h2 id="eliminacion">Cómo eliminar tus datos</h2>
+  <p>Tus datos se eliminan automáticamente en los plazos indicados arriba. Si quieres que se borren antes, escribe a <a href="https://github.com/albertreynoso">github.com/albertreynoso</a> indicando tu número de WhatsApp y se eliminarán en un máximo de 7 días.</p>
+</article>
+</main>
+</body>
+</html>
